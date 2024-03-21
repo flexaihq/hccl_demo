@@ -875,6 +875,19 @@ static void send_recv_ranks_test_driver(hccl_demo_data&             demo_data,
                   ((hccl_rank == reportingReceiverRank) || (hccl_rank == reportingSenderRank)));
 }
 
+synModuleId available_devices[8];
+void build_available_accelerators(void)
+{
+  FILE* fp =  popen("hl-smi -Q module_id --format=csv | tail -n +2", "r");
+  char device_id[4];
+  int i = 0;
+
+  while (fgets(device_id, sizeof(device_id), fp) != nullptr) {
+    log() << "Found Module ID: " << device_id << ", assigning to virtual device: " << i << std::endl;
+    available_devices[i++] = std::stoi(device_id);
+  }
+}
+
 int main()
 {
     try
@@ -914,9 +927,12 @@ int main()
         }
 
         // Initialize Synapse API context
-        CHECK_SYNAPSE_STATUS(synInitialize());
-        // Acquire device
-        const synModuleId device_module_id = get_hccl_rank() % get_demo_box_size();
+	CHECK_SYNAPSE_STATUS(synInitialize());
+
+	build_available_accelerators();
+
+	// Acquire device
+        const synModuleId device_module_id = available_devices[get_hccl_rank() % get_demo_box_size()];
         CHECK_SYNAPSE_STATUS(synDeviceAcquireByModuleId(&demo_data.device_handle, device_module_id));
 
 #if AFFINITY_ENABLED
